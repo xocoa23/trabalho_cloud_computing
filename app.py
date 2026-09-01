@@ -14,6 +14,14 @@ from flask import Flask, redirect, render_template, session, url_for
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "chave-insegura-para-desenvolvimento")
 
+# Atras do balanceador do Azure o container recebe HTTP puro, entao o Flask
+# precisa ser informado de que a conexao original do usuario era HTTPS.
+if os.getenv("APP_ENV") == "producao":
+    app.config["PREFERRED_URL_SCHEME"] = "https"
+
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 LOGIN_ATIVO = bool(CLIENT_ID and CLIENT_SECRET)
