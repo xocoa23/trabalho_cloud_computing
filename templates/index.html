@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeployLog — comprovante de deploy</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+  <article class="comprovante">
+    <div class="stamp">{{ ambiente }}</div>
+
+    <h1>Comprovante de deploy</h1>
+    <p class="sub">Esta página descreve a imagem que está rodando neste servidor agora.</p>
+
+    <dl>
+      <div class="campo">
+        <dt>Commit</dt>
+        <dd class="mono">{{ commit[:7] }}</dd>
+      </div>
+      <div class="campo">
+        <dt>Build gerado em</dt>
+        <dd class="mono">{{ build_time }}</dd>
+      </div>
+    </dl>
+
+    {% if usuario %}
+      <p class="conferido">
+        <img class="avatar" src="{{ usuario.avatar }}" alt="">
+        Conferido por {{ usuario.login }}.
+        <a class="link" href="{{ url_for('sair') }}">Sair</a>
+      </p>
+    {% elif login_ativo %}
+      <a class="botao" href="{{ url_for('entrar') }}">Entrar com GitHub</a>
+    {% endif %}
+  </article>
+
+</body>
+</html>
