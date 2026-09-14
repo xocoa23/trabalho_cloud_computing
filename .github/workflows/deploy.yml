@@ -1,12 +1,19 @@
 name: Build e deploy no Azure
 
-# A cada push na main o workflow constroi a imagem e publica no ACR.
-# O Web App esta com deploy continuo ligado, entao ele detecta a imagem
-# nova e se atualiza sozinho. Nao e preciso autenticar no Azure aqui.
+# A cada push na main o workflow:
+#   1. constroi a imagem e publica no ACR
+#   2. aponta o Web App para a imagem nova e reinicia
+#   3. confere na URL publica que o commit no ar e o deste push
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: webapp-deploylog-xocoa23
+  RESOURCE_GROUP: rg-deploylog
+  IMAGE_NAME: deploylog
+  IMAGE_TAG: latest
 
 jobs:
   deploy:
@@ -25,7 +32,46 @@ jobs:
         run: |
           docker build \
             --build-arg APP_COMMIT=${{ github.sha }} \
-            --build-arg APP_BUILD_TIME="$(date -u '+%d/%m/%Y %H:%M UTC')" \
-            -t ${{ secrets.ACR_SERVIDOR }}/deploylog:latest \
+            --build-arg APP_BUILD_TIME="$(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M') (Brasília)" \
+            -t ${{ secrets.ACR_SERVIDOR }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
             .
-          docker push ${{ secrets.ACR_SERVIDOR }}/deploylog:latest
+          docker push ${{ secrets.ACR_SERVIDOR }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+      - name: Login no Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configurar imagem no Web App
+        run: |
+          az webapp config container set \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --container-image-name ${{ secrets.ACR_SERVIDOR }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+      - name: Reiniciar Web App
+        run: |
+          az webapp restart \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }}
+
+      # O container leva alguns minutos para subir; tenta por ate 5 minutos.
+      - name: Validar deploy
+        run: |
+          HOST=$(az webapp show \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query defaultHostName -o tsv)
+          URL="https://$HOST/versao"
+          echo "Esperando o commit ${{ github.sha }} em $URL"
+          for tentativa in $(seq 1 30); do
+            RESPOSTA=$(curl -s --max-time 10 "$URL" || true)
+            if echo "$RESPOSTA" | grep -q "${{ github.sha }}"; then
+              echo "Deploy validado na tentativa $tentativa: $RESPOSTA"
+              exit 0
+            fi
+            echo "Tentativa $tentativa: ainda nao ($RESPOSTA)"
+            sleep 10
+          done
+          echo "::error::O site nao passou a servir o commit ${{ github.sha }}"
+          exit 1

@@ -26,10 +26,13 @@ Azure Container Registry, Azure Web App for Containers, GitHub Actions.
            v
   +------------------+          +------------------------+
   | Azure Container  | -------> |  Azure Web App         |
-  | Registry         |  webhook |  for Containers        |
+  | Registry         |   pull   |  for Containers        |
   +------------------+          +-----------+------------+
+           ^                                |
+           |   az webapp config + restart   |  URL publica HTTPS
+           +---- (GitHub Actions) ----------+
                                             |
-                                     URL publica HTTPS
+                          curl /versao  <---+  validacao
 
   Tudo dentro do Resource Group rg-deploylog
 ```
@@ -40,17 +43,18 @@ Azure Container Registry, Azure Web App for Containers, GitHub Actions.
 2. O runner do GitHub constrói a imagem, injetando o SHA do commit e o
    horário do build como argumentos de build.
 3. A imagem é publicada no Azure Container Registry.
-4. O Web App está com deploy contínuo ligado: o ACR avisa por webhook e o
-   Web App puxa a imagem nova e reinicia sozinho.
-
-O Azure não precisa de credencial do GitHub e o GitHub não precisa de
-credencial do Azure além do acesso ao registry.
+4. O workflow faz login no Azure, aponta o Web App para a imagem nova
+   (`az webapp config container set`) e reinicia o Web App.
+5. **Validação:** o workflow consulta `https://<webapp>/versao` até a
+   resposta conter o SHA do commit que disparou o pipeline. Se em 5 minutos
+   o site não estiver servindo a versão nova, o pipeline fica vermelho.
 
 ## Rodando localmente
 
 ```bash
 pip install -r requirements.txt
 python app.py          # http://localhost:8000
+                       # http://localhost:8000/versao  (JSON com commit e build)
 ```
 
 ## Secrets do repositório
@@ -60,6 +64,24 @@ python app.py          # http://localhost:8000
 | `ACR_SERVIDOR` | `<nome-do-acr>.azurecr.io` |
 | `ACR_USUARIO` | nome do ACR |
 | `ACR_SENHA` | senha de administrador do ACR |
+| `AZURE_CREDENTIALS` | JSON do service principal (ver abaixo) |
+
+Gerando o `AZURE_CREDENTIALS` (no Cloud Shell do portal Azure):
+
+```bash
+az ad sp create-for-rbac --name sp-deploylog --role contributor \
+  --scopes /subscriptions/<id-da-assinatura>/resourceGroups/rg-deploylog \
+  --json-auth
+```
+
+## App settings do Web App
+
+| Setting | Valor |
+|---|---|
+| `WEBSITES_PORT` | `8000` (porta do gunicorn) |
+| `APP_ENV` | `producao` |
+| `SECRET_KEY` | texto aleatório longo |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | da OAuth App |
 
 ## Autenticação GitHub
 

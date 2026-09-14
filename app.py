@@ -39,16 +39,28 @@ if LOGIN_ATIVO:
     )
 
 
+def info_build():
+    return {
+        "commit": os.getenv("APP_COMMIT", "local"),
+        "build_time": os.getenv("APP_BUILD_TIME", "nao informado"),
+        "ambiente": os.getenv("APP_ENV", "desenvolvimento"),
+    }
+
+
 @app.route("/")
 def index():
     return render_template(
         "index.html",
-        commit=os.getenv("APP_COMMIT", "local"),
-        build_time=os.getenv("APP_BUILD_TIME", "nao informado"),
-        ambiente=os.getenv("APP_ENV", "desenvolvimento"),
+        **info_build(),
         usuario=session.get("usuario"),
         login_ativo=LOGIN_ATIVO,
     )
+
+
+# Usado pelo pipeline para conferir que a imagem nova esta no ar.
+@app.route("/versao")
+def versao():
+    return info_build()
 
 
 @app.route("/entrar")
