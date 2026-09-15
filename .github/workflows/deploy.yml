@@ -32,7 +32,7 @@ jobs:
         run: |
           docker build \
             --build-arg APP_COMMIT=${{ github.sha }} \
-            --build-arg APP_BUILD_TIME="$(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M') (Brasília)" \
+            --build-arg APP_BUILD_TIME="$(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M')" \
             -t ${{ secrets.ACR_SERVIDOR }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
             .
           docker push ${{ secrets.ACR_SERVIDOR }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
